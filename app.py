@@ -3,7 +3,7 @@ from routes import routes
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    app.register_blueprint(pipeline)
+    app.register_blueprint(routes)
     return app
 
 app = create_app()
