@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenSky Processed Data Dashboard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f4f7fb;
+            color: #222;
+        }
+
+        header {
+            background: #0b3d91;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1400px;
+            margin: 20px auto;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #0b3d91;
+            color: white;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #082d6b;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+
+        .card h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: #0b3d91;
+        }
+
+        .card p {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            overflow: auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;
+        }
+
+        thead {
+            background: #0b3d91;
+            color: white;
+        }
+
+        th, td {
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: #f1f5ff;
+        }
+
+        .status {
+            margin-bottom: 16px;
+            font-weight: bold;
+            color: #0b3d91;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .airborne {
+            background: #d1f5dd;
+            color: #116530;
+        }
+
+        .ground {
+            background: #ffe0cc;
+            color: #9a3412;
+        }
+
+        .anomaly-true {
+            background: #ffd6d6;
+            color: #b00020;
+        }
+
+        .anomaly-false {
+            background: #e6f7e6;
+            color: #1b5e20;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>OpenSky Processed Data Dashboard</h1>
+        <p>Live processed aircraft records stored in MongoDB</p>
+    </header>
+
+    <div class="container">
+        <div class="button-row">
+            <button onclick="runPipeline()">Run Pipeline</button>
+            <button onclick="loadProcessedData()">Refresh Processed Data</button>
+        </div>
+
+        <div class="status" id="statusMessage">Ready</div>
+
+        <div class="summary">
+            <div class="card">
+                <h3>Total Records</h3>
+                <p id="totalRecords">0</p>
+            </div>
+            <div class="card">
+                <h3>Airborne Flights</h3>
+                <p id="airborneCount">0</p>
+            </div>
+            <div class="card">
+                <h3>On Ground Flights</h3>
+                <p id="groundCount">0</p>
+            </div>
+            <div class="card">
+                <h3>Anomalies</h3>
+                <p id="anomalyCount">0</p>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Callsign</th>
+                        <th>ICAO24</th>
+                        <th>Country</th>
+                        <th>Latitude</th>
+                        <th>Longitude</th>
+                        <th>Velocity (km/h)</th>
+                        <th>Altitude</th>
+                        <th>Status</th>
+                        <th>Phase</th>
+                        <th>Speed Category</th>
+                        <th>Altitude Category</th>
+                        <th>Stale</th>
+                        <th>Anomaly</th>
+                        <th>Processed At</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="14">No data loaded yet.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function runPipeline() {
+            const statusMessage = document.getElementById("statusMessage");
+            statusMessage.textContent = "Running pipeline...";
+
+            try {
+                const response = await fetch("/run-pipeline");
+                const data = await response.json();
+
+                statusMessage.textContent =
+                    `${data.message} | Raw: ${data.raw_records_count} | Processed: ${data.processed_records_count}`;
+
+                await loadProcessedData();
+            } catch (error) {
+                statusMessage.textContent = "Error running pipeline.";
+                console.error(error);
+            }
+        }
+
+        async function loadProcessedData() {
+            const statusMessage = document.getElementById("statusMessage");
+
+            try {
+                const response = await fetch("/processed-data");
+                const data = await response.json();
+
+                statusMessage.textContent = `Loaded ${data.length} processed records`;
+                updateSummary(data);
+                renderTable(data);
+            } catch (error) {
+                statusMessage.textContent = "Error loading processed data.";
+                console.error(error);
+            }
+        }
+
+        function updateSummary(data) {
+            const total = data.length;
+            const airborne = data.filter(item => item.flight_status === "airborne").length;
+            const ground = data.filter(item => item.flight_status === "on_ground").length;
+            const anomaly = data.filter(item => item.anomaly_flag === true).length;
+
+            document.getElementById("totalRecords").textContent = total;
+            document.getElementById("airborneCount").textContent = airborne;
+            document.getElementById("groundCount").textContent = ground;
+            document.getElementById("anomalyCount").textContent = anomaly;
+        }
+
+        function renderTable(data) {
+            const tableBody = document.getElementById("tableBody");
+
+            if (!data.length) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="14">No processed data found.</td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tableBody.innerHTML = data.map(item => `
+                <tr>
+                    <td>${item.callsign || "UNKNOWN"}</td>
+                    <td>${item.icao24 || "-"}</td>
+                    <td>${item.origin_country || "-"}</td>
+                    <td>${item.latitude ?? "-"}</td>
+                    <td>${item.longitude ?? "-"}</td>
+                    <td>${item.velocity_kmh ?? 0}</td>
+                    <td>${item.altitude_used ?? 0}</td>
+                    <td>
+                        <span class="badge ${item.flight_status === 'airborne' ? 'airborne' : 'ground'}">
+                            ${item.flight_status || "-"}
+                        </span>
+                    </td>
+                    <td>${item.flight_phase || "-"}</td>
+                    <td>${item.speed_category || "-"}</td>
+                    <td>${item.altitude_category || "-"}</td>
+                    <td>${item.stale_data_flag}</td>
+                    <td>
+                        <span class="badge ${item.anomaly_flag ? 'anomaly-true' : 'anomaly-false'}">
+                            ${item.anomaly_flag}
+                        </span>
+                    </td>
+                    <td>${item.processed_at || "-"}</td>
+                </tr>
+            `).join("");
+        }
+
+        window.onload = loadProcessedData;
+    </script>
+</body>
+</html>
